@@ -5,9 +5,11 @@ import sys
 import os
 import sqlite3
 import json
+import pprint
+
 
 class bcolors:
-    HEADER = '\033[95m'
+    HEADER= '\033[95m'
     OKBLUE = '\033[94m'
     OKGREEN = '\033[92m'
     WARNING = '\033[93m'
@@ -18,42 +20,56 @@ class bcolors:
 
 
 def warn(str):
-    print bcolors.WARNING+'Warning: '+str+bcolors.ENDC
+    return bcolors.WARNING+'Warning: '+str+bcolors.ENDC
 
 def error(str):
-    print bcolors.FAIL+'Error: '+ str+bcolors.ENDC
+    return bcolors.FAIL+'Error: '+ str+bcolors.ENDC
 
 def info(str):
-    print bcolors.OKGREEN+'Info: '+str+bcolors.ENDC
+    return bcolors.OKGREEN+'Info: '+str+bcolors.ENDC
+
+def header(str):
+    return bcolors.HEADER+str+bcolors.ENDC
+def blue(str):
+    return bcolors.OKBLUE+str+bcolors.ENDC
+def green(str):
+    return bcolors.OKGREEN+str+bcolors.ENDC
+def bold(str):
+    return bcolors.BOLD+str+bcolors.ENDC
 
 class TablePrinter(object):
-    def __init__(self, fmt, sep=' ', ul=None):
+    def __init__(self, records):
         """
-        Print a list of dicts as a table
-        @param fmt: list of tuple(heading, key, width)
-        heading: str, column label
-        key: dictionary key to value to print
-        width: int, column width in chars
-        @param sep: string, separation between columns
-        @param ul: string, character to underline column label, or None for no underlining
+        Print a list of tuples as a table
     """
-
         super(TablePrinter,self).__init__()
-        self.fmt   = str(sep).join('{lb}{0}:{1}{rb}'.format(key, width, lb='{', rb='}') for heading,key,width in fmt)
-        self.head  = {key:heading for heading,key,width in fmt}
-        self.ul    = {key:str(ul)*width for heading,key,width in fmt} if ul else None
-        self.width = {key:width for heading,key,width in fmt}
+        self.headers = records[0].keys()
+        self.rows = records
+        self.formatStr=self.format(records[0])
+        self.__call__()
+    def format(self,cols):
+        formats=[]
+        align='<'
+        width = 0
 
-    def row(self, data):
-        return self.fmt.format(**{ k:str(data.get(k,''))[:w] for k,w in self.width.iteritems() })
+        for col in cols:
+            if type(col) == int:
+                align='^'
+                width = 5
+            elif type(col) == str or type(col) == unicode:
+                align = '<'
+                width = len(col) + 4
+            formats.append('{:'+align+str(width)+'}')
 
-    def __call__(self, dataList):
-        _r = self.row
-        res = [_r(data) for data in dataList]
-        res.insert(0, _r(self.head))
-        if self.ul:
-            res.insert(1, _r(self.ul))
-            return '\n'.join(res)
+        return ' '.join( [f for f in formats])
+
+    def __call__(self):
+        # print header
+        print header(self.formatStr.format(*self.headers))
+
+        for row in self.rows:
+            print blue(self.formatStr.format(*row))
+
 
 class DirtyQuery(cmd.Cmd):
     """ A simple command based query to search flat files (nodejs dirty-db) format"""
@@ -65,13 +81,15 @@ class DirtyQuery(cmd.Cmd):
         cmd.Cmd.__init__(self)
         os.unlink(DirtyQuery.tmp+'/dirty-query.db')
         self.tmpdb = sqlite3.connect(DirtyQuery.tmp+'/dirty-query.db')
+        self.tmpdb.row_factory = sqlite3.Row
         self.cur = self.tmpdb.cursor()
+        self.pretty = pprint.PrettyPrinter(indent=2)
     def dropTable(self,name):
         self.cur.execute('drop table if exists '+name)
         self.tmpdb.commit()
     def do_use(self,collection):
         if not collection:
-            error('Must specify existing collection')
+            print error('Must specify existing collection')
             return
         self.collections =[s.strip() for s in  collection.split(',')]
 
@@ -86,7 +104,7 @@ class DirtyQuery(cmd.Cmd):
 
                 for line in fr:
                     if len(line.strip()) ==  0 or not line:
-                        print 'skipping..'
+                        print info('skipping..')
                         break
                     rec = json.loads(line)
                     if lno == 1:
@@ -99,7 +117,7 @@ class DirtyQuery(cmd.Cmd):
                 # cur.close()
                 fr.close()
             else:
-                error('No collection exists')
+                print error('No collection exists')
 
     def typeOf(self,obj):
         if type(obj) is list:
@@ -158,18 +176,39 @@ class DirtyQuery(cmd.Cmd):
         istmt = 'insert into '+name+'('+self.listToStr(cols)+') values '+questions
         return istmt,values
 
+    def showObject(self,query):
+        table = query[query.index('from')+4:query.index('where')].strip()
+        try:
+            recordKey = table[0:len(table)-1]
+            query = query.replace('**','lno')
+            query = self.cur.execute(query)
+            for row in self.cur.fetchall():
+                print green(self.pretty.pformat(json.loads(linecache.getline(DirtyQuery.tmp+'/'+table+'.db',row['lno']))['val'][recordKey]))
+        except Exception as e:
+            print error('Query Error:' + e.args[0])
+
+
     def do_select(self,query):
         if not query:
-            error('Must specify a query statement, refer standard '+bcolors.BOLD+'SQL SELECT')
+            print error('Must specify a query statement, refer standard '+bcolors.BOLD+'SQL SELECT')
+            return
+        if query.strip().startswith('**'):
+            query = 'select '+ query+';'
+            self.showObject(query)
             return
         query = 'select '+ query+';'
         if sqlite3.complete_statement(query):
-            try:
-                query = query.strip()
-                self.cur.execute(query)
-                print self.cur.fetchall()
-            except sqlite3.Error as e:
-                error('Query Error: ' + e.args[0])
+                try:
+                    query = query.strip()
+                    self.cur.execute(query)
+                    TablePrinter(self.cur.fetchall())
+                # for row in self.cur.fetchall():
+                #     if count == 1:
+                #         print info(str(row.keys()))
+                #         count = count+1
+                #     print row
+                except Exception as e:
+                    print error('Query Error: ' + e.args[0])
 
     def do_quit(self,line):
         self.tmpdb.close()
@@ -185,7 +224,7 @@ class Compactor(object):
         self.map = {}
 
     def prepareMap(self):
-        print 'finding unique records.. in %s' % (self.src)
+        print info('finding unique records.. in %s' % (self.src))
         lno = 1
         fr = open(self.src)
         for line in fr:
@@ -195,11 +234,11 @@ class Compactor(object):
             self.map[rec['key']] = lno
             lno+=1
         fr.close()
-        print 'done'
+        print info('done')
 
     def compact(self):
         self.prepareMap()
-        print 'starting compaction on %s' % (self.src)
+        print info('starting compaction on %s' % (self.src))
         fw = open(self.dest,'w')
 
         values = self.map.values()
@@ -215,9 +254,9 @@ class Compactor(object):
 
         fw.close()
         linecache.clearcache()
-        print 'done'
+        print info('done')
         self.swap()
-        print('renaming %s to %s, now compacted file is %s' % (self.src,self.src+'.orig',self.src))
+        print info('ready to use %s' % (self.src))
 
     def swap(self):
         # os.rename(self.src,self.src+'.orig')
