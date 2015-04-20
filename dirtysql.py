@@ -44,29 +44,42 @@ class TablePrinter(object):
             return
         self.headers = records[0].keys()
         self.rows = records
-        self.formatStr=self.format(records[0])
+        self.formatStr,self.line=self.format(records)
         self.__call__()
 
-    def format(self,cols):
+    def format(self,rows):
         formats=[]
         align='<'
+        widths = []
         width = 0
+        maxWidth = 0
 
-        for col in cols:
+        for idx,col in enumerate(rows[0]):
+            maxWidth = 0
+
+            for row in rows:
+                if type(row[idx]) == int:
+                    width = 10
+                elif type(row[idx]) == str or type(row[idx]) == unicode:
+                    align = '<'
+                    width = len(row[idx]) + 2
+                if width>maxWidth:
+                    maxWidth = width
+            widths.append(maxWidth)
+        totalWidth = 0
+        for idx,col in enumerate(rows[0]):
             if type(col) == int:
                 align='^'
-                width = 5
             elif type(col) == str or type(col) == unicode:
                 align = '<'
-                width = len(col) + 4
-            formats.append('{:'+align+str(width)+'}')
-
-        return ' '.join( [f for f in formats])
+            formats.append('{:'+align+str(widths[idx])+'}')
+            totalWidth = totalWidth + widths[idx]
+        return '| '.join( [f for f in formats]),'{:-<'+str(totalWidth)+'}'
 
     def __call__(self):
         # print header
         print header(self.formatStr.format(*self.headers))
-
+        print header(self.line.format('-'))
         for row in self.rows:
             print blue(self.formatStr.format(*row))
 
