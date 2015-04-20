@@ -39,10 +39,14 @@ class TablePrinter(object):
         Print a list of tuples as a table
     """
         super(TablePrinter,self).__init__()
+        if len(records) == 0:
+            warn('No record found')
+            return
         self.headers = records[0].keys()
         self.rows = records
         self.formatStr=self.format(records[0])
         self.__call__()
+
     def format(self,cols):
         formats=[]
         align='<'
@@ -65,7 +69,6 @@ class TablePrinter(object):
 
         for row in self.rows:
             print blue(self.formatStr.format(*row))
-
 
 class DirtyQuery(cmd.Cmd):
     """ A simple command based query to search flat files (nodejs dirty-db) format"""
@@ -138,7 +141,7 @@ class DirtyQuery(cmd.Cmd):
                 # cur.close()
                 fr.close()
             else:
-                print error('No collection exists')
+                print error('No collection exists '+collection)
 
     def typeOf(self,obj):
         if type(obj) is list:
@@ -198,8 +201,8 @@ class DirtyQuery(cmd.Cmd):
         return istmt,values
 
     def showObject(self,query):
-        table = query[query.index('from')+4:query.index('where')].strip()
         try:
+            table = query[query.index('from')+4:len(query)].strip().split(' ')[0]
             recordKey = self.recordKey(table)
             query = query.replace('**','lno')
             query = self.cur.execute(query)
@@ -207,7 +210,6 @@ class DirtyQuery(cmd.Cmd):
                 print green(self.pretty.pformat(json.loads(linecache.getline(DirtyQuery.tmp+'/'+table+'.db',row['lno']))['val'][recordKey]))
         except Exception as e:
             print error('Query Error:' + e.args[0])
-
 
     def do_select(self,query):
         if not query:
@@ -223,17 +225,13 @@ class DirtyQuery(cmd.Cmd):
                     query = query.strip()
                     self.cur.execute(query)
                     TablePrinter(self.cur.fetchall())
-                # for row in self.cur.fetchall():
-                #     if count == 1:
-                #         print info(str(row.keys()))
-                #         count = count+1
-                #     print row
                 except Exception as e:
                     print error('Query Error: ' + e.args[0])
 
     def do_quit(self,line):
         self.tmpdb.close()
         return True
+
     def do_EOF(self,line):
         return self.do_quit(line)
 
