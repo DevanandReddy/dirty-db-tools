@@ -75,12 +75,17 @@ class DirtyQuery(cmd.Cmd):
     def __init__(self):
         #cmd is a old style class
         cmd.Cmd.__init__(self)
-        os.unlink(DirtyQuery.tmp+'/dirty-query.db')
+        self.clear()
         self.tmpdb = sqlite3.connect(DirtyQuery.tmp+'/dirty-query.db')
         self.tmpdb.row_factory = sqlite3.Row
         self.cur = self.tmpdb.cursor()
         self.pretty = pprint.PrettyPrinter(indent=2)
 
+    def clear(self):
+        try:
+            os.unlink(DirtyQuery.tmp+'/dirty-query.db')
+        except:
+            pass
 
     def dropTable(self,name):
         self.cur.execute('drop table if exists '+name)
@@ -98,17 +103,22 @@ class DirtyQuery(cmd.Cmd):
         '''
         print info(msg)
 
+    def recordKey(self,collection):
+        if collection.endswith('ies'):
+            return collection[0:len(collection)-3]+'y'
+        return collection[0:len(collection)-1]
+
     def do_use(self,collection):
         if not collection:
             print error('Must specify existing collection')
-            return
+            return collection[0:len(collection)-1]
         self.collections =[s.strip() for s in  collection.split(',')]
 
         for collection in self.collections:
             if os.path.isfile(collection+'.db'):
                 Compactor(collection+'.db').compact()
                 fr = open(DirtyQuery.tmp+'/'+collection+'.db')
-                recordKey = collection[0:len(collection)-1]
+                recordKey = self.recordKey(collection)
                 lno = 1
                 cols=[]
                 self.dropTable(collection)
@@ -190,7 +200,7 @@ class DirtyQuery(cmd.Cmd):
     def showObject(self,query):
         table = query[query.index('from')+4:query.index('where')].strip()
         try:
-            recordKey = table[0:len(table)-1]
+            recordKey = self.recordKey(table)
             query = query.replace('**','lno')
             query = self.cur.execute(query)
             for row in self.cur.fetchall():
