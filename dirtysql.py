@@ -18,16 +18,12 @@ class bcolors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
-
 def warn(str):
     return bcolors.WARNING+'Warning: '+str+bcolors.ENDC
-
 def error(str):
     return bcolors.FAIL+'Error: '+ str+bcolors.ENDC
-
 def info(str):
     return bcolors.OKGREEN+'Info: '+str+bcolors.ENDC
-
 def header(str):
     return bcolors.HEADER+str+bcolors.ENDC
 def blue(str):
@@ -84,9 +80,24 @@ class DirtyQuery(cmd.Cmd):
         self.tmpdb.row_factory = sqlite3.Row
         self.cur = self.tmpdb.cursor()
         self.pretty = pprint.PrettyPrinter(indent=2)
+
+
     def dropTable(self,name):
         self.cur.execute('drop table if exists '+name)
         self.tmpdb.commit()
+
+    def help_use(self):
+        msg=""" use <<filename1,filename2....filenameN>>
+        Ex: say users.db will be used as
+        use users
+        """
+        print info(msg)
+    def help_select(self):
+        msg='''Please refer standard SQL SELECT syntax here http://www.sqlite.org/lang_select.html
+        For showing complete object. select ** from <<table>> where <<some condition>>
+        '''
+        print info(msg)
+
     def do_use(self,collection):
         if not collection:
             print error('Must specify existing collection')
