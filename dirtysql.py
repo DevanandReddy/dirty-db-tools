@@ -133,7 +133,7 @@ class DirtyQuery(cmd.Cmd):
 
         for collection in self.collections:
             if os.path.isfile(collection+'.db'):
-                Compactor(collection+'.db').compact()
+                Compactor(collection+'.db',DirtyQuery.tmp).compact()
                 fr = open(DirtyQuery.tmp+'/'+collection+'.db')
                 recordKey = self.recordKey(collection)
                 lno = 1
