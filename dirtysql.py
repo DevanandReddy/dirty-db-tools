@@ -6,7 +6,8 @@ import os
 import sqlite3
 import json
 import pprint
-
+import tempfile
+import shutil
 
 class bcolors:
     HEADER= '\033[95m'
@@ -86,7 +87,7 @@ class TablePrinter(object):
 class DirtyQuery(cmd.Cmd):
     """ A simple command based query to search flat files (nodejs dirty-db) format"""
     prompt = 'dirty-sql:|> '
-    tmp = '/tmp'
+    tmp = tempfile.mkdtemp('-dir-sql')
 
     def __init__(self):
         #cmd is a old style class
@@ -142,7 +143,7 @@ class DirtyQuery(cmd.Cmd):
                 for line in fr:
                     if len(line.strip()) ==  0 or not line:
                         print info('skipping..')
-                        break
+                        continue
                     rec = json.loads(line)
                     if lno == 1:
                         tableStmt, cols =  self.createTable(collection,rec['val'][recordKey])
@@ -243,16 +244,17 @@ class DirtyQuery(cmd.Cmd):
 
     def do_quit(self,line):
         self.tmpdb.close()
+        shutil.rmtree(DirtyQuery.tmp)
         return True
 
     def do_EOF(self,line):
         return self.do_quit(line)
 
 class Compactor(object):
-    def __init__(self,src):
+    def __init__(self,src,tmp):
         super(Compactor,self).__init__()
         self.src = src
-        self.dest = '/tmp/'+self.src+'.bk'
+        self.dest = tmp+'/'+self.src+'.bk'
         self.map = {}
 
     def prepareMap(self):
@@ -292,7 +294,7 @@ class Compactor(object):
 
     def swap(self):
         # os.rename(self.src,self.src+'.orig')
-        os.rename(self.dest,'/tmp/'+self.src)
+        os.rename(self.dest,tmp+'/'+self.src)
 
 if __name__ == '__main__':
     DirtyQuery().cmdloop()
