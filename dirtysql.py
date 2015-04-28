@@ -256,6 +256,7 @@ class Compactor(object):
         self.src = src
         self.dest = tmp+'/'+self.src+'.bk'
         self.map = {}
+        self.tmp = tmp
 
     def prepareMap(self):
         print info('finding unique records.. in %s' % (self.src))
@@ -294,7 +295,7 @@ class Compactor(object):
 
     def swap(self):
         # os.rename(self.src,self.src+'.orig')
-        os.rename(self.dest,tmp+'/'+self.src)
+        os.rename(self.dest,self.tmp+'/'+self.src)
 
 if __name__ == '__main__':
     DirtyQuery().cmdloop()
